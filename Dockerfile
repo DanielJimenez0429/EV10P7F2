@@ -1,12 +1,15 @@
-# Imagen base con JDK y Maven
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+# ETAPA DE CONSTRUCCIÓN
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
-RUN mvn clean package -DskipTests
+# La compilación genera el JAR ejecutable
+RUN mvn clean install -DskipTests
 
-# Etapa de ejecución
-FROM eclipse-temurin:17
+# ETAPA DE EJECUCIÓN
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+# El JAR debe copiarse con su nombre correcto
+COPY --from=build /app/target/demo-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
-CMD ["java", "-jar", "app.jar"]
+# Comando de inicio
+ENTRYPOINT ["java", "-jar", "app.jar"]

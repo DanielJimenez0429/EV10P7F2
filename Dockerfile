@@ -1,29 +1,45 @@
 # ETAPA 1: CONSTRUCCIÓN (BUILD)
-# Usamos una imagen con Maven y JDK 21 (basado en su pom.xml)
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 
+# Copiamos todo el repositorio a /app
+COPY . /app
+
+# Configuramos el directorio de trabajo para que sea donde están los artefactos de Maven
+WORKDIR /app/demo 
+
+# 🔴 FIX CRÍTICO: Ejecutamos el clean install desde el directorio 'demo' 
+# (donde está el src y se esperaría el pom.xml, pero como el pom.xml está en la raíz, usaremos el comando mvn de otra manera)
+
+# El comando mvn DEBE ejecutarse donde está el pom.xml, que es la raíz.
+# Pero el código fuente está en una subcarpeta 'demo/src'
+
+# Regresamos al método anterior, pero con las rutas correctas:
+
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copia los archivos de configuración y código
+# 1. Copia el pom.xml desde la raíz (donde está)
 COPY pom.xml .
-COPY src ./src
 
-# Compila el proyecto y genera el JAR. 
-# El fix en pom.xml asegura que el manifiesto sea correcto.
-RUN mvn clean install -DskipTests
+# 2. Copia la carpeta 'demo' que contiene el 'src'
+COPY demo/ ./demo
 
-# ETAPA 2: EJECUCIÓN (RUNTIME)
-# Usamos una imagen ligera de JRE 21 para la ejecución
-FROM eclipse-temurin:21-jre-alpine
+# 3. Compila el proyecto, apuntando al pom.xml y al código fuente.
+# Necesitamos decirle a Maven dónde encontrar el src. La forma más fácil es 
+# copiar y trabajar en la estructura estándar:
 
+# COPIAMOS TODO A LA RAIZ DEL CONTENEDOR Y NOS FIJAMOS EN EL POM.XML
+
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# 🔴 FIX CRÍTICO: Copiamos el archivo JAR con su nombre exacto.
-# Lo renombramos a "app.jar" para simplificar el comando de inicio.
-COPY --from=build /app/target/demo-0.0.1-SNAPSHOT.jar app.jar
+# Copia el pom.xml de la raíz
+COPY pom.xml .
 
-# Render usará la variable de entorno $PORT, pero exponemos 8080 por convención.
-EXPOSE 8080
+# 🔴 FIX CRÍTICO: Copiamos el contenido de 'demo/src' a la raíz del WORKDIR (/app/src)
+# Si su código fuente principal es 'demo/src', el Dockerfile debe reflejarlo:
+COPY demo/src ./src 
 
-# Comando de inicio: Ejecuta el JAR renombrado.
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Esto no funcionará si la carpeta 'target' ya existe, y no queremos copiar target.
+
+# ¡La solución más simple es copiar todo y luego compilar!

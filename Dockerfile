@@ -1,45 +1,36 @@
-# ETAPA 1: CONSTRUCCIÓN (BUILD)
+# =========================================================================
+# ETAPA 1: CONSTRUCCIÓN (BUILD STAGE)
+# Usa la imagen base de Maven con JDK 21
+# =========================================================================
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 
-# Copiamos todo el repositorio a /app
-COPY . /app
-
-# Configuramos el directorio de trabajo para que sea donde están los artefactos de Maven
-WORKDIR /app/demo 
-
-# 🔴 FIX CRÍTICO: Ejecutamos el clean install desde el directorio 'demo' 
-# (donde está el src y se esperaría el pom.xml, pero como el pom.xml está en la raíz, usaremos el comando mvn de otra manera)
-
-# El comando mvn DEBE ejecutarse donde está el pom.xml, que es la raíz.
-# Pero el código fuente está en una subcarpeta 'demo/src'
-
-# Regresamos al método anterior, pero con las rutas correctas:
-
-FROM maven:3.9.6-eclipse-temurin-21 AS build
-WORKDIR /app
-
-# 1. Copia el pom.xml desde la raíz (donde está)
-COPY pom.xml .
-
-# 2. Copia la carpeta 'demo' que contiene el 'src'
-COPY demo/ ./demo
-
-# 3. Compila el proyecto, apuntando al pom.xml y al código fuente.
-# Necesitamos decirle a Maven dónde encontrar el src. La forma más fácil es 
-# copiar y trabajar en la estructura estándar:
-
-# COPIAMOS TODO A LA RAIZ DEL CONTENEDOR Y NOS FIJAMOS EN EL POM.XML
-
-FROM maven:3.9.6-eclipse-temurin-21 AS build
+# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
 # Copia el pom.xml de la raíz
 COPY pom.xml .
 
-# 🔴 FIX CRÍTICO: Copiamos el contenido de 'demo/src' a la raíz del WORKDIR (/app/src)
-# Si su código fuente principal es 'demo/src', el Dockerfile debe reflejarlo:
-COPY demo/src ./src 
+# FIX CRÍTICO DE RUTA: Copia la carpeta 'src' anidada (demo/src) a la ubicación estándar de Maven (/app/src)
+COPY demo/src ./src
 
-# Esto no funcionará si la carpeta 'target' ya existe, y no queremos copiar target.
+# Compila el proyecto: genera el JAR ejecutable en /app/target/
+RUN mvn clean install -DskipTests
 
-# ¡La solución más simple es copiar todo y luego compilar!
+
+# =========================================================================
+# ETAPA 2: EJECUCIÓN (RUNTIME STAGE)
+# Usa una imagen ligera de JRE 21 (solo para ejecutar, no para compilar)
+# =========================================================================
+FROM eclipse-temurin:21-jre-alpine
+
+# Establece el directorio de trabajo para la ejecución
+WORKDIR /app
+
+# Copia el JAR compilado de la etapa 'build' y lo renombra a 'app.jar'
+# El nombre del JAR se basa en el pom.xml: demo-0.0.1-SNAPSHOT.jar
+COPY --from=build /app/target/demo-0.0.1-SNAPSHOT.jar app.jar
+
+EXPOSE 8080
+
+# Comando de inicio: Ejecuta el JAR
+ENTRYPOINT ["java", "-jar", "app.jar"]
